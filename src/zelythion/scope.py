@@ -1,5 +1,5 @@
 """
-SentinelScan scope enforcement.
+Zelythion scope enforcement.
 
 The scope module is the authoritative gatekeeper for all network destinations.
 Every URL — including redirects and discovered links — must pass scope validation

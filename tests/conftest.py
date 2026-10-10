@@ -1,14 +1,14 @@
 """
-Shared test fixtures and configuration for SentinelScan tests.
+Shared test fixtures and configuration for Zelythion tests.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from sentinelscan.config import ScanConfig, ScanProfile, OutputFormat
-from sentinelscan.scope import ScopeValidator, ScopeSpec
-from sentinelscan.models import (
+from zelythion.config import ScanConfig, ScanProfile, OutputFormat
+from zelythion.scope import ScopeValidator, ScopeSpec
+from zelythion.models import (
     Evidence,
     Finding,
     Confidence,
@@ -18,7 +18,7 @@ from sentinelscan.models import (
     OWASPMapping,
     HttpEvidence,
 )
-from sentinelscan import __version__
+from zelythion import __version__
 
 
 # ---------------------------------------------------------------------------

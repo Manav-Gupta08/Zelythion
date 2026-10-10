@@ -1,10 +1,10 @@
 """
-SentinelScan CLI — entry point using Typer.
+Zelythion CLI — entry point using Typer.
 
 Commands:
-    sentinel scan <URL>       Run a security scan against an authorized target.
-    sentinel checks list      List all available security checks.
-    sentinel --version        Print scanner version.
+    zelythion scan <URL>       Run a security scan against an authorized target.
+    zelythion checks list      List all available security checks.
+    zelythion --version        Print scanner version.
 """
 
 from __future__ import annotations
@@ -18,13 +18,13 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from sentinelscan import __version__, AUTHORIZATION_NOTICE
-from sentinelscan.config import ScanConfig, ScanProfile, OutputFormat
-from sentinelscan.scope import ScopeValidator, ScopeError
+from zelythion import __version__, AUTHORIZATION_NOTICE
+from zelythion.config import ScanConfig, ScanProfile, OutputFormat
+from zelythion.scope import ScopeValidator, ScopeError
 
 app = typer.Typer(
-    name="sentinel",
-    help="SentinelScan — An evidence-driven web application security scanner.",
+    name="zelythion",
+    help="Zelythion — An evidence-driven web application security scanner.",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -41,12 +41,12 @@ err_console = Console(stderr=True)
 
 def _version_callback(value: bool) -> None:
     if value:
-        console.print(f"SentinelScan v{__version__}")
+        console.print(f"Zelythion v{__version__}")
         raise typer.Exit()
 
 
 # ---------------------------------------------------------------------------
-# sentinel scan
+# zelythion scan
 # ---------------------------------------------------------------------------
 
 @app.command("scan")
@@ -171,7 +171,7 @@ def _run_placeholder_scan(config: ScanConfig) -> None:
             "and finding models. The HTTP client and security checks are implemented\n"
             "in Phase 1 and Phase 2 respectively.\n\n"
             f"[dim]Target: {config.target}[/dim]",
-            title="[bold]SentinelScan — Phase 0[/bold]",
+            title="[bold]Zelythion — Phase 0[/bold]",
             border_style="blue",
         )
     )
@@ -179,7 +179,7 @@ def _run_placeholder_scan(config: ScanConfig) -> None:
 
 
 # ---------------------------------------------------------------------------
-# sentinel checks list
+# zelythion checks list
 # ---------------------------------------------------------------------------
 
 @checks_app.command("list")
@@ -214,7 +214,7 @@ def checks_list() -> None:
     console.print(table)
     console.print(
         "\n[dim]Checks marked [yellow]Planned[/yellow] are scheduled for Phase 2+. "
-        "Run [bold]sentinel scan <URL>[/bold] to execute implemented checks.[/dim]"
+        "Run [bold]zelythion scan <URL>[/bold] to execute implemented checks.[/dim]"
     )
 
 
@@ -229,7 +229,7 @@ def main(
         typer.Option("--version", callback=_version_callback, is_eager=True, help="Show version."),
     ] = False,
 ) -> None:
-    """SentinelScan — An extensible, evidence-driven web application security scanner."""
+    """Zelythion — An extensible, evidence-driven web application security scanner."""
 
 
 if __name__ == "__main__":

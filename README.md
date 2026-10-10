@@ -1,4 +1,4 @@
-# SentinelScan
+# Zelythion
 
 > An extensible, evidence-driven web application security scanner built in Python.
 
@@ -9,7 +9,7 @@
 
 ## ⚠️ Authorization Notice
 
-SentinelScan is designed **exclusively for authorized security testing**.
+Zelythion is designed **exclusively for authorized security testing**.
 
 You must have explicit written permission from the system owner before scanning any target.
 Unauthorized scanning may be illegal and unethical. This tool does **not** authorize you to
@@ -19,7 +19,7 @@ test any system.
 
 ## Overview
 
-SentinelScan is a modular, evidence-driven web application security scanner that helps
+Zelythion is a modular, evidence-driven web application security scanner that helps
 developers and authorized security engineers identify and remediate security weaknesses
 through safe, reproducible, configurable security testing.
 
@@ -53,8 +53,8 @@ or established commercial security scanners.
 ### Install from source
 
 ```bash
-git clone https://github.com/Manav-Gupta08/sentinelscan.git
-cd sentinelscan
+git clone https://github.com/Manav-Gupta08/zelythion.git
+cd zelythion
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -63,8 +63,8 @@ pip install -e ".[dev]"
 ### Verify installation
 
 ```bash
-sentinel --version
-sentinel --help
+zelythion --version
+zelythion --help
 ```
 
 ---
@@ -73,13 +73,13 @@ sentinel --help
 
 ```bash
 # Show available commands
-sentinel --help
+zelythion --help
 
 # List available checks
-sentinel checks list
+zelythion checks list
 
 # Run a passive scan (you must own or have permission to test the target)
-sentinel scan https://your-authorized-target.example
+zelythion scan https://your-authorized-target.example
 ```
 
 ---
@@ -87,7 +87,7 @@ sentinel scan https://your-authorized-target.example
 ## CLI Reference
 
 ```
-sentinel scan <URL> [OPTIONS]
+zelythion scan <URL> [OPTIONS]
   --profile   [passive|active]  Scan profile (default: passive)
   --format    [text|json]       Output format (default: text)
   --output    PATH              Write report to file
@@ -95,9 +95,9 @@ sentinel scan <URL> [OPTIONS]
   --timeout   FLOAT             Request timeout in seconds (default: 10.0)
   --verbose                     Enable verbose output
 
-sentinel checks list            List all available checks
+zelythion checks list            List all available checks
 
-sentinel --version              Print scanner version
+zelythion --version              Print scanner version
 ```
 
 ---
@@ -105,7 +105,7 @@ sentinel --version              Print scanner version
 ## Architecture
 
 ```
-src/sentinelscan/
+src/zelythion/
 ├── cli.py          — Typer CLI entry point
 ├── config.py       — Pydantic-validated configuration
 ├── scope.py        — Target scope and safety enforcement
@@ -125,7 +125,7 @@ See [docs/architecture.md](docs/architecture.md) for a full diagram and design d
 pytest
 
 # Run with coverage
-pytest --cov=sentinelscan --cov-report=term-missing
+pytest --cov=zelythion --cov-report=term-missing
 
 # Lint
 ruff check .

@@ -1,5 +1,5 @@
 """
-Unit tests for SentinelScan configuration.
+Unit tests for Zelythion configuration.
 """
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from sentinelscan.config import ScanConfig, ScanProfile, OutputFormat
+from zelythion.config import ScanConfig, ScanProfile, OutputFormat
 
 
 class TestScanConfig:

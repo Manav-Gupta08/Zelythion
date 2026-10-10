@@ -1,5 +1,5 @@
 """
-SentinelScan configuration models.
+Zelythion configuration models.
 
 All configuration is validated through Pydantic to ensure type safety and
 to catch misconfiguration early, before any network activity occurs.

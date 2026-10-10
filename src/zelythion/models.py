@@ -1,5 +1,5 @@
 """
-SentinelScan finding and scan result models.
+Zelythion finding and scan result models.
 
 Findings are the primary output of the scanner. Every finding must carry
 sufficient evidence for an operator to independently verify the issue,
@@ -304,7 +304,7 @@ class Finding(BaseModel):
         description="UTC timestamp when this finding was created.",
     )
     scanner_version: str = Field(
-        description="Version of SentinelScan that produced this finding.",
+        description="Version of Zelythion that produced this finding.",
     )
     false_positive_notes: Optional[str] = Field(
         default=None,
@@ -356,7 +356,7 @@ class ScanResult(BaseModel):
         default_factory=lambda: str(uuid.uuid4()),
         description="Unique identifier for this scan run.",
     )
-    scanner_version: str = Field(description="SentinelScan version that produced this scan.")
+    scanner_version: str = Field(description="Zelythion version that produced this scan.")
 
     # --- Target ---
     target: str = Field(description="Normalized target URL.")

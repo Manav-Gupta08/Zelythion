@@ -1,5 +1,5 @@
 """
-Unit tests for SentinelScan finding and scan result models.
+Unit tests for Zelythion finding and scan result models.
 
 These tests verify that:
 - Finding instances require all mandatory fields.
@@ -18,8 +18,8 @@ from datetime import timezone
 
 from pydantic import ValidationError
 
-from sentinelscan import __version__
-from sentinelscan.models import (
+from zelythion import __version__
+from zelythion.models import (
     Confidence,
     DetectionMethod,
     Evidence,

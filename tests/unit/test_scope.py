@@ -1,5 +1,5 @@
 """
-Unit tests for SentinelScan scope enforcement.
+Unit tests for Zelythion scope enforcement.
 
 These tests verify that the ScopeValidator correctly:
 - Accepts valid public HTTPS targets.
@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from sentinelscan.scope import (
+from zelythion.scope import (
     ScopeValidator,
     ScopeSpec,
     ScopeError,
