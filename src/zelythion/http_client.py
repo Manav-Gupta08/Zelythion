@@ -1,5 +1,5 @@
 """
-Zelythion bounded HTTP client.
+Zelythion bounded HTTP client — with redirect scope validation.
 
 This is the single point of contact for all outbound HTTP traffic during a scan.
 Every request — including redirects — passes through scope validation and safety
@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+import urllib.parse
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Optional
 
@@ -340,12 +341,20 @@ class BoundedHttpClient:
                     "has no Location header."
                 )
 
-            # Resolve relative redirects.
-            resolved = str(httpx.URL(location).copy_merge_params({}))
-            if not location.startswith("http"):
-                resolved = str(httpx.URL(current_url).copy_with(path=location))
+            # Resolve relative redirects correctly via urljoin.
+            # urljoin handles: absolute URLs, absolute paths (/path), and
+            # relative paths (../other) all correctly.
+            resolved = urllib.parse.urljoin(current_url, location)
+
+            # Strip fragment — fragments are client-side only and must not
+            # be forwarded in requests.
+            resolved = urllib.parse.urldefrag(resolved).url
 
             redirect_chain.append(current_url)
+            logger.debug(
+                "Redirect hop %d: %s -> %s (HTTP %s)",
+                hops + 1, current_url, resolved, response.status_code,
+            )
 
             # Scope-validate the redirect destination.
             try:
