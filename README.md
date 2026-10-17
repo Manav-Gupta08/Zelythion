@@ -5,8 +5,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://python.org)
 
----
-
 ## ⚠️ Authorization Notice
 
 Zelythion is designed **exclusively for authorized security testing**.
@@ -14,8 +12,6 @@ Zelythion is designed **exclusively for authorized security testing**.
 You must have explicit written permission from the system owner before scanning any target.
 Unauthorized scanning may be illegal and unethical. This tool does **not** authorize you to
 test any system.
-
----
 
 ## Overview
 
@@ -29,8 +25,6 @@ evidence-backed findings.
 **What it is not:** A replacement for comprehensive penetration testing, source-code review,
 or established commercial security scanners.
 
----
-
 ## Features (v0.1)
 
 - Safe, bounded HTTP reconnaissance
@@ -40,8 +34,6 @@ or established commercial security scanners.
 - JSON report output
 - Strict scope enforcement and SSRF protection
 - Conservative passive-only scanning by default
-
----
 
 ## Installation
 
@@ -53,7 +45,7 @@ or established commercial security scanners.
 ### Install from source
 
 ```bash
-git clone https://github.com/Manav-Gupta08/zelythion.git
+git clone https://github.com/Manav-Gupta08/Zelythion.git
 cd zelythion
 python3 -m venv .venv
 source .venv/bin/activate
@@ -67,8 +59,6 @@ zelythion --version
 zelythion --help
 ```
 
----
-
 ## Quick Start
 
 ```bash
@@ -81,8 +71,6 @@ zelythion checks list
 # Run a passive scan (you must own or have permission to test the target)
 zelythion scan https://your-authorized-target.example
 ```
-
----
 
 ## CLI Reference
 
@@ -100,8 +88,6 @@ zelythion checks list            List all available checks
 zelythion --version              Print scanner version
 ```
 
----
-
 ## Architecture
 
 ```
@@ -115,8 +101,6 @@ src/zelythion/
 ```
 
 See [docs/architecture.md](docs/architecture.md) for a full diagram and design decisions.
-
----
 
 ## Development
 
@@ -137,36 +121,32 @@ ruff format .
 mypy src/
 ```
 
----
-
 ## Testing
 
 Tests live in `tests/`. Unit tests use local mock servers and never require live internet targets.
 
 ```bash
-pytest tests/unit/       # Unit tests only
+pytest tests/unit/        # Unit tests only
 pytest tests/integration/ # Integration tests (requires local test server)
 ```
-
----
 
 ## Security
 
 See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy.
 
----
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
-
 ## License
 
-[MIT License](LICENSE) — Copyright (c) 2026 Manav Gupta
+[MIT License](LICENSE)
 
----
+## Author
+
+**Manav Gupta**
+
+CyberSecurity Student | Software Developer | Backend Engineer
 
 ## Known Limitations (v0.1)
 
