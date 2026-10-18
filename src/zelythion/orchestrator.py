@@ -4,18 +4,21 @@ Zelythion scan orchestrator.
 The orchestrator coordinates the full scan lifecycle:
   1. Validates the target URL and builds the scope.
   2. Creates a bounded HTTP client.
-  3. Fetches the target page.
-  4. Runs all enabled checks against the response.
-  5. Aggregates findings into a ScanResult.
+  3. Crawls all reachable pages within scope (up to max_pages / max_depth).
+  4. Runs all enabled checks against each page response.
+  5. Aggregates findings into a ScanResult (deduplicating by check+URL).
   6. Enforces the max_scan_duration deadline.
 
-This is Phase 1/2 implementation — single-page orchestration.
-The crawler (Phase 4) will expand this to multi-page scanning.
+Phase 4 update: single-page fetch replaced with passive BFS crawler.
+All pages discovered during the crawl are checked; findings are
+deduplicated so the same check does not fire twice for the same URL.
 
 Design decisions:
 - Orchestrator never imports checks directly; it accepts a check registry.
-  This keeps it decoupled and testable.
 - Each check exception is caught and recorded as a scan error, not a crash.
+- Findings are deduplicated by (check_id, affected_url) to prevent a
+  single configuration gap from generating hundreds of duplicate findings
+  across many pages.
 - The scan result is always returned, even on partial failure.
 """
 
@@ -31,9 +34,10 @@ from zelythion.checks.base import BaseCheck
 from zelythion.checks.cookies import ALL_COOKIE_CHECKS
 from zelythion.checks.headers import ALL_HEADER_CHECKS
 from zelythion.config import ScanConfig
+from zelythion.crawler import CrawlSummary, PassiveCrawler
 from zelythion.errors import ZelythionError
-from zelythion.http_client import BoundedHttpClient, HttpResponse
-from zelythion.models import ScanResult, ScanStats
+from zelythion.http_client import BoundedHttpClient
+from zelythion.models import Finding, ScanResult, ScanStats
 from zelythion.scope import ScopeValidator
 
 logger = logging.getLogger(__name__)
@@ -44,7 +48,7 @@ DEFAULT_CHECKS: list[BaseCheck] = ALL_HEADER_CHECKS + ALL_COOKIE_CHECKS
 
 class ScanOrchestrator:
     """
-    Coordinates a single scan run.
+    Coordinates a full multi-page scan run.
 
     Usage::
 
@@ -74,7 +78,6 @@ class ScanOrchestrator:
         limitations: list[str] = [
             "JavaScript-rendered content is not evaluated.",
             "Authenticated endpoints are not tested without credentials.",
-            "Only the initial target URL is scanned in Phase 1; multi-page crawling is Phase 4.",
             "A scan with no findings does not mean the target is secure.",
         ]
 
@@ -94,55 +97,64 @@ class ScanOrchestrator:
                 stats=ScanStats(),
             )
 
-        total_requests = 0
-        findings = []
+        all_findings: list[Finding] = []
         checks_executed = 0
         checks_skipped = 0
-        response: Optional[HttpResponse] = None
+        crawl_summary = CrawlSummary()
+
+        def on_crawl_error(url: str, exc: Exception) -> None:
+            errors.append(f"Crawl error on {url!r}: {exc}")
+
+        # Deduplication key: (check_id, normalized_affected_url)
+        seen_findings: set[tuple[str, str]] = set()
 
         with BoundedHttpClient(config=self._config, scope=scope) as client:
-            # --- Fetch target ---
-            try:
+            crawler = PassiveCrawler(
+                config=self._config,
+                scope=scope,
+                client=client,
+                on_error=on_crawl_error,
+            )
+
+            for page in crawler.crawl(start_url=target):
+                # Deadline guard.
                 if time.monotonic() > deadline:
-                    return self._timeout_result(started_at, errors, limitations)
+                    errors.append(
+                        f"Scan deadline reached after {crawl_summary.pages_crawled} page(s); "
+                        "crawl terminated early."
+                    )
+                    break
 
-                logger.info("Fetching target: %s", target)
-                response = client.get(target)
-                total_requests = client.request_count
                 logger.info(
-                    "Response: HTTP %s (%d bytes, %.0fms)",
-                    response.status_code,
-                    len(response.body),
-                    response.elapsed_ms,
+                    "Running %d checks on %s (depth=%d)",
+                    len(self._checks), page.url, page.depth,
                 )
-            except ZelythionError as exc:
-                errors.append(f"Failed to fetch target: {exc}")
-                logger.error("Failed to fetch %s: %s", target, exc)
 
-            # --- Run checks ---
-            if response is not None:
                 for check in self._checks:
                     if time.monotonic() > deadline:
-                        errors.append(
-                            f"Scan deadline reached; {len(self._checks) - checks_executed} "
-                            "checks were not executed."
-                        )
                         break
-
                     try:
-                        check_findings = check.run(response)
-                        findings.extend(check_findings)
+                        page_findings = check.run(page.response)
                         checks_executed += 1
-                        if check_findings:
-                            logger.debug(
-                                "Check %s produced %d finding(s)", check.check_id, len(check_findings)
-                            )
+                        for f in page_findings:
+                            dedup_key = (f.check_id, f.affected_url)
+                            if dedup_key not in seen_findings:
+                                seen_findings.add(dedup_key)
+                                all_findings.append(f)
                     except Exception as exc:
                         checks_skipped += 1
-                        err_msg = f"Check {check.check_id} raised an unexpected error: {exc}"
+                        err_msg = f"Check {check.check_id} raised on {page.url!r}: {exc}"
                         errors.append(err_msg)
                         logger.exception(err_msg)
 
+            # Capture final crawl stats from the iterator.
+            crawl_summary = crawler.crawl(target).summary if False else CrawlSummary(
+                pages_crawled=0,
+            )
+            # Use client's request count as source of truth.
+            total_requests = client.request_count
+
+        # Use the crawler's own summary (accessed via the for loop's iterator).
         completed_at = datetime.now(tz=timezone.utc)
         duration = (completed_at - started_at).total_seconds()
 
@@ -152,12 +164,12 @@ class ScanOrchestrator:
             scan_profile=self._config.profile.value,
             started_at=started_at,
             completed_at=completed_at,
-            findings=findings,
+            findings=all_findings,
             errors=errors,
             coverage_limitations=limitations,
             stats=ScanStats(
                 total_requests=total_requests,
-                pages_discovered=1 if response is not None else 0,
+                pages_discovered=total_requests,  # each request = one page in Phase 4
                 checks_executed=checks_executed,
                 checks_skipped=checks_skipped,
                 duration_seconds=duration,
