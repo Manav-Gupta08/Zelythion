@@ -9,14 +9,32 @@ Zelythion uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Bounded HTTP client (`http_client.py`) with TLS enforcement, configurable
+  connect/read timeouts, response-size cap, token-bucket rate limiting, threading
+  semaphore concurrency limit, and request-budget enforcement.
+- SSRF protection at the redirect layer — every redirect hop is scope-validated
+  before the next request is sent; out-of-scope destinations raise `RedirectOutOfScopeError`.
+- Redaction utilities (`utils/`) — URL query-param redaction, body excerpt sanitization
+  with secret-pattern regex, and header sensitivity checks.
+- 10 passive security checks: `HDR-001` through `HDR-007` (security headers) and
+  `CKI-001` through `CKI-003` (cookie attributes), each with OWASP 2025 mapping,
+  CWE identifiers, evidence, remediation, and false-positive notes.
+- `ScanOrchestrator` — coordinates the scan lifecycle with deadline enforcement
+  and graceful per-check error capture.
+- JSON report generation (`reporting/json_report.py`) — deterministic sorted output,
+  schema version, full redaction pass at serialisation time, file writing support.
+- CLI wired to real orchestrator and reporter: Rich-formatted text summary table with
+  severity colours, severity-based exit codes (0–5), JSON output mode.
+- 181 unit tests — no live network, all using mock transports and fixtures.
+
 ### Planned
 
-- Bounded HTTP client with scope enforcement and SSRF protection (Phase 1).
-- Security header and cookie attribute checks (Phase 2).
-- JSON report generation with redaction (Phase 3).
 - Passive same-origin crawler (Phase 4).
-
----
+- TLS/certificate checks (Phase 5).
+- Expanded OWASP coverage (Phase 6–7).
+- Web dashboard with FastAPI + React (Phase 10).
 
 ## [0.1.0] — 2026-10-10
 
