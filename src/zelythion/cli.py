@@ -19,6 +19,8 @@ from rich.table import Table
 from rich.text import Text
 
 from zelythion import __version__, AUTHORIZATION_NOTICE
+from zelythion.checks.cookies import ALL_COOKIE_CHECKS
+from zelythion.checks.headers import ALL_HEADER_CHECKS
 from zelythion.config import ScanConfig, ScanProfile, OutputFormat
 from zelythion.scope import ScopeValidator, ScopeError
 
@@ -34,6 +36,16 @@ app.add_typer(checks_app, name="checks")
 
 console = Console(stderr=False)
 err_console = Console(stderr=True)
+
+# Severity colours for Rich output.
+_SEVERITY_COLOUR = {
+    "critical": "bold red",
+    "high": "red",
+    "medium": "yellow",
+    "low": "cyan",
+    "info": "dim",
+}
+
 
 # ---------------------------------------------------------------------------
 # Version callback
@@ -58,7 +70,7 @@ def scan(
     ] = ScanProfile.passive,
     output_format: Annotated[
         OutputFormat,
-        typer.Option("--format", "-f", help="Output format: text (default) or json."),
+        typer.Option("--format", "-f", help="Output format: text (default), json, or html."),
     ] = OutputFormat.text,
     output: Annotated[
         Optional[str],
@@ -98,7 +110,7 @@ def scan(
             err_console.print("[red]Scan cancelled — authorization not confirmed.[/red]")
             raise typer.Exit(code=1)
 
-    # --- Target scope validation ---
+    # --- Target scope pre-validation ---
     try:
         validator = ScopeValidator()
         normalized = validator.validate_target_url(target)
@@ -122,9 +134,8 @@ def scan(
         console.print(f"[dim]Target   :[/dim] {config.target}")
         console.print(f"[dim]Profile  :[/dim] {config.profile.value}")
         console.print(f"[dim]Format   :[/dim] {config.output_format.value}")
-        console.print(f"[dim]Depth    :[/dim] {config.max_depth}")
+        console.print(f"[dim]Checks   :[/dim] {len(ALL_HEADER_CHECKS) + len(ALL_COOKIE_CHECKS)} enabled")
         console.print(f"[dim]Timeout  :[/dim] {config.timeout}s")
-        console.print(f"[dim]MaxPages :[/dim] {config.max_pages}")
 
     if profile == ScanProfile.active:
         console.print(
@@ -138,16 +149,12 @@ def scan(
         )
 
     console.print(f"\n[bold green]Starting scan:[/bold green] {config.target}")
-    console.print(f"[dim]Profile: {profile.value} | Checks: loading…[/dim]\n")
+    console.print(f"[dim]Profile: {profile.value}[/dim]\n")
 
-    # Scanning engine not yet implemented — placeholder output
-    _run_placeholder_scan(config)
-
-
-def _run_placeholder_scan(config: ScanConfig) -> None:
-    """Placeholder scan runner used before the engine is implemented."""
+    # --- Run scan ---
+    from zelythion.orchestrator import ScanOrchestrator
+    from zelythion.reporting.json_report import generate_json_report, generate_json_report_to_file
     from rich.progress import Progress, SpinnerColumn, TextColumn
-    import time
 
     with Progress(
         SpinnerColumn(),
@@ -155,27 +162,104 @@ def _run_placeholder_scan(config: ScanConfig) -> None:
         console=console,
         transient=True,
     ) as progress:
-        task = progress.add_task("Reconnaissance…", total=None)
-        time.sleep(0.4)
-        progress.update(task, description="Checking security headers…")
-        time.sleep(0.3)
-        progress.update(task, description="Inspecting cookies…")
-        time.sleep(0.3)
-        progress.update(task, description="Finalizing…")
-        time.sleep(0.2)
+        progress.add_task("Scanning…", total=None)
+        orchestrator = ScanOrchestrator(config)
+        result = orchestrator.run()
 
-    console.print(
-        Panel(
-            "[bold yellow]Scan engine not yet implemented.[/bold yellow]\n\n"
-            "Phase 0 establishes the project skeleton, CLI, config, scope enforcement,\n"
-            "and finding models. The HTTP client and security checks are implemented\n"
-            "in Phase 1 and Phase 2 respectively.\n\n"
-            f"[dim]Target: {config.target}[/dim]",
-            title="[bold]Zelythion — Phase 0[/bold]",
-            border_style="blue",
-        )
-    )
-    console.print("\n[dim]No findings produced — engine not yet active.[/dim]")
+    # --- Output ---
+    if output_format == OutputFormat.json:
+        report_str = generate_json_report(result)
+        if output:
+            generate_json_report_to_file(result, output)
+            console.print(f"[green]Report written to:[/green] {output}")
+        else:
+            console.print(report_str)
+
+    else:
+        # Text output — rich summary table
+        _print_text_summary(result)
+        if output:
+            # Write JSON even when text is the display format, if a file is requested.
+            generate_json_report_to_file(result, output)
+            console.print(f"\n[green]JSON report written to:[/green] {output}")
+
+    # Exit code reflects highest severity found.
+    exit_code = _exit_code(result)
+    raise typer.Exit(code=exit_code)
+
+
+def _print_text_summary(result: object) -> None:
+    """Print a Rich-formatted scan summary to the console."""
+    from zelythion.models import ScanResult
+    assert isinstance(result, ScanResult)
+
+    counts = result.summary_counts()
+    duration = result.stats.duration_seconds
+
+    console.print(f"[bold]Scan complete[/bold] in {duration:.1f}s — "
+                  f"{result.stats.total_requests} request(s), "
+                  f"{result.stats.checks_executed} check(s) run\n")
+
+    if result.errors:
+        for err in result.errors:
+            console.print(f"[yellow]⚠ {err}[/yellow]")
+        console.print()
+
+    if not result.findings:
+        console.print("[green]✓ No findings detected.[/green]")
+        console.print("[dim]Note: absence of findings is not proof of security.[/dim]")
+        return
+
+    # Findings table
+    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
+    table.add_column("Severity", width=10)
+    table.add_column("ID", width=9)
+    table.add_column("Title", width=55)
+    table.add_column("URL")
+
+    from zelythion.models import Severity as Sev
+    order = [Sev.critical, Sev.high, Sev.medium, Sev.low, Sev.info]
+    grouped = result.findings_by_severity()
+
+    for sev in order:
+        for f in grouped.get(sev.value, []):
+            colour = _SEVERITY_COLOUR.get(sev.value, "white")
+            table.add_row(
+                f"[{colour}]{sev.value.upper()}[/{colour}]",
+                f.check_id,
+                f.title[:55],
+                f.affected_url,
+            )
+
+    console.print(table)
+    console.print()
+
+    # Summary line
+    parts = []
+    for sev in order:
+        n = counts.get(sev.value, 0)
+        if n:
+            colour = _SEVERITY_COLOUR.get(sev.value, "white")
+            parts.append(f"[{colour}]{n} {sev.value}[/{colour}]")
+    console.print("Findings: " + "  ".join(parts))
+
+
+def _exit_code(result: object) -> int:
+    """Return a shell exit code based on the highest finding severity."""
+    from zelythion.models import ScanResult, Severity as Sev
+    assert isinstance(result, ScanResult)
+    counts = result.summary_counts()
+    if counts.get(Sev.critical.value, 0):
+        return 5
+    if counts.get(Sev.high.value, 0):
+        return 4
+    if counts.get(Sev.medium.value, 0):
+        return 3
+    if counts.get(Sev.low.value, 0):
+        return 2
+    if counts.get(Sev.info.value, 0):
+        return 1
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -186,35 +270,35 @@ def _run_placeholder_scan(config: ScanConfig) -> None:
 def checks_list() -> None:
     """List all available security checks."""
     table = Table(title="Available Security Checks", show_header=True, header_style="bold cyan")
-    table.add_column("ID", style="dim", width=20)
-    table.add_column("Name", width=35)
-    table.add_column("OWASP", width=12)
-    table.add_column("Mode", width=10)
-    table.add_column("Status", width=12)
+    table.add_column("ID", style="dim", width=10)
+    table.add_column("Name", width=40)
+    table.add_column("OWASP", width=10)
+    table.add_column("Mode", width=9)
+    table.add_column("Status", width=11)
 
-    planned_checks = [
-        ("HDR-001", "Missing Content-Security-Policy", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("HDR-002", "Missing X-Content-Type-Options", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("HDR-003", "Missing X-Frame-Options", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("HDR-004", "Missing HSTS", "A04:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("HDR-005", "Missing Referrer-Policy", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("HDR-006", "Missing Permissions-Policy", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("CKI-001", "Cookie missing Secure flag", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("CKI-002", "Cookie missing HttpOnly flag", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("CKI-003", "Cookie missing SameSite attribute", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("TLS-001", "HTTP used instead of HTTPS", "A04:2025", "Passive", "[yellow]Planned[/yellow]"),
+    active_checks = [
+        ("HDR-001", "Missing Content-Security-Policy", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("HDR-002", "Missing X-Content-Type-Options", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("HDR-003", "Missing X-Frame-Options", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("HDR-004", "Missing HSTS", "A04:2025", "Passive", "[green]Active[/green]"),
+        ("HDR-005", "Missing Referrer-Policy", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("HDR-006", "Missing Permissions-Policy", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("HDR-007", "Server version disclosure", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("CKI-001", "Cookie missing Secure flag", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("CKI-002", "Cookie missing HttpOnly flag", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("CKI-003", "Cookie missing/weak SameSite", "A02:2025", "Passive", "[green]Active[/green]"),
+        ("TLS-001", "HTTP instead of HTTPS", "A04:2025", "Passive", "[yellow]Planned[/yellow]"),
         ("TLS-002", "Certificate validity check", "A04:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("DSC-001", "Server version disclosure", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
-        ("DSC-002", "Directory listing exposed", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
+        ("DSC-001", "Directory listing exposed", "A02:2025", "Passive", "[yellow]Planned[/yellow]"),
     ]
 
-    for row in planned_checks:
+    for row in active_checks:
         table.add_row(*row)
 
     console.print(table)
     console.print(
-        "\n[dim]Checks marked [yellow]Planned[/yellow] are scheduled for Phase 2+. "
-        "Run [bold]zelythion scan <URL>[/bold] to execute implemented checks.[/dim]"
+        f"\n[dim]{sum(1 for r in active_checks if 'Active' in r[4])} active checks  |  "
+        f"{sum(1 for r in active_checks if 'Planned' in r[4])} planned checks[/dim]"
     )
 
 
